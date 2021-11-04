@@ -13,6 +13,6 @@ Requires `libjson-c` development files, aka `libjson-c-dev` on Debian.
 ```
 cc -O2 -o dimsway dimsway.c -ljson-c
 cp dimsway ~/bin
-``
+```
 
 Customize as appropriate, of course.

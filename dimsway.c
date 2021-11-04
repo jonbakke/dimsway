@@ -185,20 +185,8 @@ get_sway(int *socket_fd)
 	char *sway_str = malloc(ret_len + 1);
 	sway_str[ret_len] = 0;
 	int ret_actual = read(fd, sway_str, ret_len);
-	/* if interrupted, attempt re-read after 1/2 millisecond */
-	if (ret_actual != ret_len) {
-		usleep(500);
-		ret_actual += read(
-			fd,
-			&sway_str[ret_actual],
-			ret_len - ret_actual
-		);
-	}
-	if (ret_actual != ret_len) {
-		fprintf(stderr, "%s\n",
-			"Warning: incomplete readout of Sway socket."
-		);
-	}
+	if (ret_actual != ret_len)
+		exit(0);
 	return sway_str;
 }
 

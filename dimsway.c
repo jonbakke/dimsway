@@ -4,7 +4,8 @@
 /* This software was an afternoon project and has not been updated since.
  * It certainly has many bugs. */
 
-/* Set FOCUSED and UNFOCUSED to determine the opacity of windows. */
+/* Set FOCUSED and UNFOCUSED to determine the default opacity of windows. */
+/* Use -f <double> and/or -u <double> to set values at runtime. */
 #define FOCUSED 1.0
 #define UNFOCUSED 0.95
 
@@ -34,6 +35,8 @@ enum sway_msg_type {
 	GET_INPUTS = 100,
 	GET_SEATS,
 };
+
+double dim_focused, dim_unfocused;
 
 void
 endian_copy_4_bytes(uint8_t *start, const uint32_t value)
@@ -254,7 +257,7 @@ subscribe_to_window_changes(void)
 
 	/* set all windows translucent */
 	send_sway(&fd, RUN_COMMAND,
-		"for_window [tiling] opacity UNFOCUSED");
+		"for_window [tiling] opacity dim_unfocused");
 	free(get_sway(&fd));
 
 	/* get focused */
@@ -294,9 +297,9 @@ subscribe_to_window_changes(void)
 		if (NULL == id)
 			goto clear_and_continue;
 		if (0 <= last_id)
-			set_opacity(last_id, UNFOCUSED, &fd);
+			set_opacity(last_id, dim_unfocused, &fd);
 		last_id = json_object_get_int(id);
-		set_opacity(last_id, FOCUSED, &fd);
+		set_opacity(last_id, dim_focused, &fd);
 clear_and_continue:
 		json_object_put(response_json);
 		free(response_str);
@@ -306,13 +309,35 @@ clear_and_continue:
 int
 main(int argc, char **argv)
 {
-	/*
-	int fd = -1;
-	send_sway(&fd, RUN_COMMAND,
-		"for_window [tiling] opacity 1");
-	char *resp = get_sway(&fd);
-	free(resp);
-	*/
+#ifdef FOCUSED
+	dim_focused = FOCUSED;
+#endif
+#ifdef UNFOCUSED
+	dim_unfocused = UNFOCUSED;
+#endif
+
+	int opt;
+	while ((opt = getopt(argc, argv, "f:hu:")) != -1) {
+		switch (opt) {
+		case 'f':
+			dim_focused = atof(optarg);
+			break;
+		case 'u':
+			dim_unfocused = atof(optarg);
+			break;
+		case 'h': /* fall through */
+		default:
+			fprintf(
+				stderr,
+				"Usage: %s [-f focused] [-u unfocused]\n"
+				"\twhere focused and unfocused are "
+				"in the range [0.0, 1.0]\n",
+				argv[0]
+			);
+			exit(-1);
+		}
+	}
+
 	subscribe_to_window_changes();
 	return 0;
 }

@@ -22,9 +22,9 @@ This is the result of an afternoon project of a novice, out-of-work programmer. 
 # Install
 Requires `libjson-c` development files, aka `libjson-c-dev` on Debian.
 
-```
-cc -O2 -o dimsway dimsway.c -ljson-c
-cp dimsway ~/bin
-```
+Installs to `~/bin` by default. Edit `Makefile` to select a different location.
 
-Customize as appropriate, of course.
+
+```
+make install
+```

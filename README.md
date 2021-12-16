@@ -2,22 +2,24 @@
 This dims inactive windows in Sway -- similar to how I used to use `picom` or `compton` in X.
 
 # Example
-To set focused windows at 100% opacity, unfocused at 70%:
+To set unfocused windows at 70% opacity:
 ```
-dimsway -f 1.0 -u 0.7
+dimsway 0.7
 ```
 
 To change opacity, e.g. when moving from light theme to dark:
 ```
-killall dimsway
-dimsway -f 1.0 -u 0.95
+# Increase opacity:
+kill -SIGUSR1 $(pgrep dimsway)
+# Decrease opacity:
+kill -SIGUSR2 $(pgrep dimsway)
 ```
 
 # License
 MIT. Have at it, friends.
 
 # Quality
-This is the result of an afternoon project of a novice, out-of-work programmer. You have been warned.
+Lackasaisical at best, but it serves me well.
 
 # Install
 Requires `libjson-c` development files, aka `libjson-c-dev` on Debian.

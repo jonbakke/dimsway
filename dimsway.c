@@ -1,15 +1,17 @@
 /* dimsway - dim inactive windows in Sway */
 /* copyright 2021 Jonathan Bakke -- MIT license offered */
 
-/* This software was an afternoon project and has not been updated since.
- * It certainly has many bugs. */
+/* This software was an afternoon project. It certainly has many bugs. */
 
-/* Set FOCUSED and UNFOCUSED to determine the default opacity of windows. */
-/* Use -f <double> and/or -u <double> to set values at runtime. */
-#define FOCUSED 1.0
+/* Set UNFOCUSED to determine the default opacity of such windows. */
+/* The value for UNFOCUSED can also be set as a command-line argument,
+ * or SIGUSR1 to increase and SIGUSR2 to decrease value by INCREMENT */
+
 #define UNFOCUSED 0.95
+#define INCREMENT 0.05
 
 #include <json-c/json.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,7 +38,12 @@ enum sway_msg_type {
 	GET_SEATS,
 };
 
-double dim_focused, dim_unfocused;
+const char usage[] = "Usage: %s [opacity]\n"
+	"\twhere opacity is in the range [0.0, 1.0],\n"
+	"\twith a default value of %.2f.\n";
+volatile double dim_focused;
+volatile double dim_unfocused;
+struct sigaction sa;
 
 void
 endian_copy_4_bytes(uint8_t *start, const uint32_t value)
@@ -48,6 +55,32 @@ endian_copy_4_bytes(uint8_t *start, const uint32_t value)
 	parse.four = value;
 	for (int i = 0; i < 4; ++i)
 		start[i] = parse.one[i];
+}
+
+void
+change_opacity(int sig)
+{
+	double delta;
+#ifdef INCREMENT
+	delta = INCREMENT;
+#else
+	delta = 0.05;
+#endif
+
+	switch (sig) {
+	case SIGUSR1:
+		dim_unfocused += delta;
+		if (1.0 < dim_unfocused)
+			dim_unfocused = 1.0;
+		break;
+	case SIGUSR2:
+		dim_unfocused -= delta;
+		if (0.0 > dim_unfocused)
+			dim_unfocused = 0.0;
+		break;
+	default:
+		break;
+	}
 }
 
 /* opens a Sway socket; returns an int, or -1 on failure */
@@ -94,7 +127,7 @@ connect_sway_socket(void)
 /* leaves socket open for additional operations;
  * socket_fd may be NULL;
  * *socket_fd may be <0; if so, acquired file descriptor is written;
- * returns the socket file descriptor, or -1 on failure */
+ * returns the socket file descriptor, or <0 on failure */
 int
 send_sway(
 	int *socket_fd,
@@ -125,7 +158,7 @@ send_sway(
 			"bytes. Ignoring:",
 			message
 		);
-		return -1;
+		return -2;
 	}
 	endian_copy_4_bytes(msg + index, msg_len);
 	index += 4;
@@ -186,10 +219,10 @@ get_sway(int *socket_fd)
 	read(fd, ret_dump, 4);
 
 	char *sway_str = malloc(ret_len + 1);
+	if (NULL == sway_str)
+		return NULL;
 	sway_str[ret_len] = 0;
-	int ret_actual = read(fd, sway_str, ret_len);
-	if (ret_actual != ret_len)
-		exit(0);
+	read(fd, sway_str, ret_len);
 	return sway_str;
 }
 
@@ -222,7 +255,6 @@ set_opacity(int con_id, double opacity, int *socket_fd)
 	send_sway(socket_fd, RUN_COMMAND, command);
 	/* empty response buffer */
 	free(get_sway(socket_fd));
-
 }
 
 int
@@ -309,34 +341,36 @@ clear_and_continue:
 int
 main(int argc, char **argv)
 {
+	char *test;
 #ifdef FOCUSED
 	dim_focused = FOCUSED;
+#else
+	dim_focused = 1.00;
 #endif
 #ifdef UNFOCUSED
 	dim_unfocused = UNFOCUSED;
+#else
+	dim_unfocused = 0.95;
 #endif
+	const double orig_unfocused = dim_unfocused;
 
-	int opt;
-	while ((opt = getopt(argc, argv, "f:hu:")) != -1) {
-		switch (opt) {
-		case 'f':
-			dim_focused = atof(optarg);
-			break;
-		case 'u':
-			dim_unfocused = atof(optarg);
-			break;
-		case 'h': /* fall through */
-		default:
-			fprintf(
-				stderr,
-				"Usage: %s [-f focused] [-u unfocused]\n"
-				"\twhere focused and unfocused are "
-				"in the range [0.0, 1.0]\n",
-				argv[0]
-			);
+	if (2 <= argc) {
+		dim_unfocused = strtod(argv[1], &test);
+		if (
+			test == argv[1] ||
+			0.0 > dim_unfocused ||
+			1.0 < dim_unfocused
+		) {
+			fprintf(stderr, usage, argv[0], orig_unfocused);
 			exit(-1);
 		}
 	}
+
+	sa.sa_handler = change_opacity;
+	sa.sa_flags = 0;
+	sa.sa_restorer = NULL;
+	sigaction(SIGUSR1, &sa, NULL);
+	sigaction(SIGUSR2, &sa, NULL);
 
 	subscribe_to_window_changes();
 	return 0;
